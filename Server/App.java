@@ -11,6 +11,8 @@ public class App {
                 message = "こんにちは！";
             } else if (path.equals("/bye")) { // パスが /bye か比べます
                 message = "さようなら！";
+            } else if (path.equals("/items")) { // パスが /items か比べます
+                message = "牛乳を買う\nパンを買う\n掃除をする\n";
             } else {
                 message = "ページが見つかりません";
             }
