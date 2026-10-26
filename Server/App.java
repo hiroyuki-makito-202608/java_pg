@@ -6,9 +6,15 @@ import java.util.ArrayList; // Todoの一覧を作るために使います
 import java.util.List; // Todoの一覧を入れる型です
 
 public class App {
+    static List<Todo> todos = new ArrayList<>(); // ★変更
+    static int nextId = 1; // ★変更
+
     public static void main(String[] args) throws Exception {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress(8080), 0);
-        List<String> todos = new ArrayList<>(); // 追加されたTodoを保存する空の一覧です
+        todos.add(new Todo(nextId++, "牛乳を買う")); // ★変更
+        Todo egg = new Todo(nextId++, "卵を買う"); // ★変更
+        egg.setDone(true); // ★変更
+        todos.add(egg); // ★変更
 
         httpServer.createContext("/", exchange -> {
             String requestPath = exchange.getRequestURI().getPath(); // アクセスされたパスを取り出します
@@ -18,18 +24,23 @@ public class App {
             if (requestPath.equals("/add") && requestMethod.equals("POST")) { // POSTで /add に送られたTodoを受け取ります
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8); // 送られた中身をUTF-8で読みます
                 String encodedTodo = requestBody.substring(5); // todo= の5文字を取り除きます
-                String todoItem = URLDecoder.decode(encodedTodo, StandardCharsets.UTF_8); // URL形式の日本語を元に戻します
-                if (!todoItem.isEmpty()) { // 入力が空でないときだけ追加します
-                    todos.add(todoItem); // Todoを一覧に追加します
-                } // 空でないTodoの追加を終えます
+                String title = URLDecoder.decode(encodedTodo, StandardCharsets.UTF_8); // ★変更
+                if (!title.isEmpty()) { // ★変更
+                    todos.add(new Todo(nextId, title)); // ★変更
+                    nextId++; // ★変更
+                } // ★変更
                 exchange.getResponseHeaders().set("Location", "/"); // 戻り先をトップページにします
                 exchange.sendResponseHeaders(303, -1); // トップページへ移動する返答を送ります
                 exchange.close(); // 通信を閉じます
                 return; // このリクエストの処理を終えます
             } else if (requestPath.equals("/")) { // トップページにフォームとTodo一覧を表示します
                 String htmlContent = "<form method='post' action='/add'><input name='todo'><button>追加</button></form><ul>"; // Todo追加フォームと一覧を作ります
-                for (String todoItem : todos) { // Todoを1件ずつ取り出します
-                    htmlContent += "<li>" + todoItem + "</li>"; // Todoを一覧に加えます
+                for (Todo todo : todos) { // ★変更
+                    String mark = ""; // ★変更
+                    if (todo.isDone()) { // ★変更
+                        mark = " ✔"; // ★変更
+                    } // ★変更
+                    htmlContent += "<li>" + todo.getTitle() + mark + "</li>"; // ★変更
                 } // Todoをすべて一覧に加え終わります
                 htmlContent += "</ul>"; // 一覧を閉じます
                 responseMessage = htmlContent; // 作ったHTMLを返答にします
@@ -46,3 +57,31 @@ public class App {
         System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）");
     }
 }
+
+class Todo { // ★変更
+    private final int id; // ★変更
+    private final String title; // ★変更
+    private boolean done; // ★変更
+
+    Todo(int id, String title) { // ★変更
+        this.id = id; // ★変更
+        this.title = title; // ★変更
+        this.done = false; // ★変更
+    } // ★変更
+
+    int getId() { // ★変更
+        return id; // ★変更
+    } // ★変更
+
+    String getTitle() { // ★変更
+        return title; // ★変更
+    } // ★変更
+
+    boolean isDone() { // ★変更
+        return done; // ★変更
+    } // ★変更
+
+    void setDone(boolean done) { // ★変更
+        this.done = done; // ★変更
+    } // ★変更
+} // ★変更
