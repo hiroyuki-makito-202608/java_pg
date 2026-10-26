@@ -2,6 +2,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder; // 日本語を元の文字に戻すために使います
 import java.nio.charset.StandardCharsets; // UTF-8を指定するために使います
+import java.time.LocalDate;
 import java.util.ArrayList; // Todoの一覧を作るために使います
 import java.util.List; // Todoの一覧を入れる型です
 
@@ -11,8 +12,8 @@ public class App {
 
     public static void main(String[] args) throws Exception {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress(8080), 0);
-        todos.add(new Todo(nextId++, "牛乳を買う")); // ★変更
-        Todo egg = new Todo(nextId++, "卵を買う"); // ★変更
+        todos.add(new Todo(nextId++, "牛乳を買う", null)); // ★変更
+        Todo egg = new Todo(nextId++, "卵を買う", null); // ★変更
         egg.setDone(true); // ★変更
         todos.add(egg); // ★変更
 
@@ -23,10 +24,18 @@ public class App {
             exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8"); // 通常の返答をUTF-8のテキストにします
             if (requestPath.equals("/add") && requestMethod.equals("POST")) { // POSTで /add に送られたTodoを受け取ります
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8); // 送られた中身をUTF-8で読みます
-                String encodedTodo = requestBody.substring(5); // todo= の5文字を取り除きます
-                String title = URLDecoder.decode(encodedTodo, StandardCharsets.UTF_8); // ★変更
+                String title = "";
+                String dueDateValue = "";
+                for (String formField : requestBody.split("&")) {
+                    if (formField.startsWith("todo=")) {
+                        title = URLDecoder.decode(formField.substring(5), StandardCharsets.UTF_8);
+                    } else if (formField.startsWith("dueDate=")) {
+                        dueDateValue = URLDecoder.decode(formField.substring(8), StandardCharsets.UTF_8);
+                    }
+                }
                 if (!title.isEmpty()) { // ★変更
-                    todos.add(new Todo(nextId, title)); // ★変更
+                    LocalDate dueDate = dueDateValue.isEmpty() ? null : LocalDate.parse(dueDateValue);
+                    todos.add(new Todo(nextId, title, dueDate));
                     nextId++; // ★変更
                 } // ★変更
                 exchange.getResponseHeaders().set("Location", "/"); // 戻り先をトップページにします
@@ -63,16 +72,29 @@ public class App {
                 exchange.sendResponseHeaders(303, -1); // ★追加
                 return; // ★追加
             } else if (requestPath.equals("/")) { // トップページにフォームとTodo一覧を表示します
-                String htmlContent = "<form method='post' action='/add'><input name='todo'><button>追加</button></form><ul>"; // Todo追加フォームと一覧を作ります
-                for (Todo todo : todos) { // ★変更
-                    String mark = ""; // ★変更
-                    if (todo.isDone()) { // ★変更
-                        mark = " ✔"; // ★変更
-                    } // ★変更
-                    htmlContent += "<li>" + todo.getTitle() + mark + " <a href='/done?id=" + todo.getId() + "'>完了</a> <a href='/delete?id=" + todo.getId() + "'>削除</a></li>"; // ★追加
-                } // Todoをすべて一覧に加え終わります
-                htmlContent += "</ul>"; // 一覧を閉じます
-                responseMessage = htmlContent; // 作ったHTMLを返答にします
+                String htmlContent = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>my ToDo</title>"
+                        + "<style>body { max-width: 600px; margin: 2rem auto; padding: 0 1rem; font-size: 1rem; }</style>"
+                        + "</head><body><h1>my ToDo</h1>"
+                        + "<form method='post' action='/add'>やること：<input name='todo'><br>"
+                        + "<label>実行期限日：<input type='date' name='dueDate'></label>"
+                        + "<button>追加</button></form>";
+                if (todos.isEmpty()) {
+                    htmlContent += "<p>やることは、いまゼロです</p>";
+                } else {
+                    htmlContent += "<table><tr><th>番号</th><th>やること</th><th>設定日</th><th>実行期限日</th><th>操作</th></tr>";
+                    for (Todo todo : todos) { // ★変更
+                        String mark = ""; // ★変更
+                        if (todo.isDone()) { // ★変更
+                            mark = " ✔"; // ★変更
+                        } // ★変更
+                        htmlContent += "<tr><td>" + todo.getId() + "</td><td>" + todo.getTitle() + mark
+                                + "</td><td>" + todo.getSetDate() + "</td><td>" + todo.getDueDate()
+                                + "</td><td><a href='/done?id=" + todo.getId()
+                                + "'>完了</a> <a href='/delete?id=" + todo.getId() + "'>削除</a></td></tr>"; // ★追加
+                    } // Todoをすべて一覧に加え終わります
+                    htmlContent += "</table>";
+                }
+                responseMessage = htmlContent + "</body></html>"; // 作ったHTMLを返答にします
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8"); // トップページをUTF-8のHTMLにします
             } else {
                 responseMessage = "ページが見つかりません";
@@ -90,11 +112,15 @@ public class App {
 class Todo { // ★変更
     private final int id; // ★変更
     private final String title; // ★変更
+    private final LocalDate setDate;
+    private final LocalDate dueDate;
     private boolean done; // ★変更
 
-    Todo(int id, String title) { // ★変更
+    Todo(int id, String title, LocalDate dueDate) {
         this.id = id; // ★変更
         this.title = title; // ★変更
+        this.setDate = LocalDate.now();
+        this.dueDate = dueDate == null ? setDate.plusDays(7) : dueDate;
         this.done = false; // ★変更
     } // ★変更
 
@@ -105,6 +131,14 @@ class Todo { // ★変更
     String getTitle() { // ★変更
         return title; // ★変更
     } // ★変更
+
+    LocalDate getSetDate() {
+        return setDate;
+    }
+
+    LocalDate getDueDate() {
+        return dueDate;
+    }
 
     boolean isDone() { // ★変更
         return done; // ★変更
