@@ -13,12 +13,38 @@ import java.util.ArrayList; // ★ SELECT結果の一覧を作るために使い
 import java.util.List; // ★ Todo一覧を保持するために使います
 
 public class App {
-    private static final String DATABASE_URL = "jdbc:sqlite:todos.db"; // ★ SQLiteデータベースの接続先です
+    private static final String DATABASE_URL = "jdbc:sqlite:Server/todos.db"; // ★ SQLiteデータベースの接続先です
 
     public static void main(String[] args) throws Exception {
         initializeDatabase(); // ★ 起動時にtodos表を用意します
         HttpServer httpServer = HttpServer.create(new InetSocketAddress(8080), 0); // HTTPサーバーを作ります
 
+        httpServer.createContext("/api/todos", exchange -> { // Todo一覧を返すAPIの入口を作成します。
+            if (!exchange.getRequestMethod().equals("GET")) { // GET以外のリクエストを確認します。
+                exchange.sendResponseHeaders(405, -1); // GET以外には405を返します。
+                exchange.close(); // レスポンスを閉じます。
+                return; // ここでリクエスト処理を終了します。
+            } // メソッドの確認を終えます。
+            try { // Todo一覧の読み込みとJSON生成を行います。
+                List<Todo> todos = loadTodos(); // データベースから全Todoを読み込みます。
+                StringBuilder json = new StringBuilder("["); // JSON配列の組み立てを始めます。
+                for (int i = 0; i < todos.size(); i++) { // Todoを順番にJSONへ追加します。
+                    if (i > 0) json.append(","); // 2件目以降の前にカンマを付けます。
+                    Todo todo = todos.get(i); // 現在のTodoを取り出します。
+                    json.append("{\"title\":\"").append(escapeJsonString(todo.getTitle())) // エスケープしたタイトルを追加します。
+                            .append("\",\"done\":").append(todo.isDone()).append("}"); // 完了状態を追加します。
+                } // 全Todoの追加を終えます。
+                json.append("]"); // JSON配列を閉じます。
+                byte[] body = json.toString().getBytes(StandardCharsets.UTF_8); // JSONをUTF-8のバイト列にします。
+                exchange.getResponseHeaders().set("Content-Type", "application/json"); // charsetを付けずにContent-Typeを設定します。
+                exchange.sendResponseHeaders(200, body.length); // 成功レスポンスと本文の長さを送ります。
+                exchange.getResponseBody().write(body); // JSON本文を返します。
+            } catch (IOException e) { // Todo一覧の読み込みに失敗した場合を処理します。
+                exchange.sendResponseHeaders(500, -1); // 内部エラーを返します。
+            } finally { // 成功・失敗のどちらでも実行します。
+                exchange.close(); // 接続を閉じます。
+            } // レスポンス処理を終えます。
+        }); // APIの入口を登録します。
         httpServer.createContext("/", exchange -> {
             String requestPath = exchange.getRequestURI().getPath(); // アクセスされたパスを取り出します
             String requestMethod = exchange.getRequestMethod(); // GETやPOSTの種類を取り出します
@@ -85,9 +111,8 @@ public class App {
             exchange.sendResponseHeaders(200, responseBody.length);
             exchange.getResponseBody().write(responseBody);
             exchange.getResponseBody().close();
-        });
-        httpServer.start();
-        System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）");
+        });httpServer.start();System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）");
+
     }
 
     private static void initializeDatabase() throws SQLException { // ★ DBへ接続してテーブルを初期化します
@@ -160,6 +185,42 @@ public class App {
             return -1; // ★ 不正なIDは無効値として扱います
         } // ★ ID変換を終えます
     } // ★ ID取得を終えます
+
+    private static String escapeJsonString(String value) { // JSON文字列に必要なエスケープを行います。
+        StringBuilder escaped = new StringBuilder(); // エスケープ後の文字列を組み立てます。
+        for (int i = 0; i < value.length(); i++) { // タイトルの各文字を確認します。
+            char c = value.charAt(i); // 現在の文字を取り出します。
+            switch (c) { // 特別な意味を持つ文字を判定します。
+                case '"':
+                    escaped.append("\\\"");
+                    break; // 二重引用符をエスケープします。
+                case '\\':
+                    escaped.append("\\\\");
+                    break; // バックスラッシュをエスケープします。
+                case '\b':
+                    escaped.append("\\b");
+                    break; // バックスペースをエスケープします。
+                case '\f':
+                    escaped.append("\\f");
+                    break; // フォームフィードをエスケープします。
+                case '\n':
+                    escaped.append("\\n");
+                    break; // 改行をエスケープします。
+                case '\r':
+                    escaped.append("\\r");
+                    break; // 復帰をエスケープします。
+                case '\t':
+                    escaped.append("\\t");
+                    break; // タブをエスケープします。
+                default: // その他の文字を処理します。
+                    if (c < 0x20)
+                        escaped.append(String.format("\\u%04x", (int) c)); // その他の制御文字をUnicode形式にします。
+                    else
+                        escaped.append(c); // 通常の文字をそのまま追加します。
+            } // 文字ごとの処理を終えます。
+        } // 全文字の処理を終えます。
+        return escaped.toString(); // エスケープ済み文字列を返します。
+    } // JSON文字列のエスケープ処理を終えます。
 }
 
 class Todo { // ★ DBから読み込んだTodoを表します
@@ -185,3 +246,4 @@ class Todo { // ★ DBから読み込んだTodoを表します
         return done; // ★ 完了状態を返します
     } // ★ 完了状態取得を終えます
 } // ★ Todoクラスを終えます
+
