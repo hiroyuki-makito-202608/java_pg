@@ -1,7 +1,10 @@
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder; // 日本語を元の文字に戻すために使います
 import java.nio.charset.StandardCharsets; // UTF-8を指定するために使います
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList; // Todoの一覧を作るために使います
 import java.util.List; // Todoの一覧を入れる型です
@@ -11,11 +14,8 @@ public class App {
     static int nextId = 1; // ★変更
 
     public static void main(String[] args) throws Exception {
+        load(); // 起動時にtodos.csvからTodo一覧を読み込みます
         HttpServer httpServer = HttpServer.create(new InetSocketAddress(8080), 0);
-        todos.add(new Todo(nextId++, "牛乳を買う", null)); // ★変更
-        Todo egg = new Todo(nextId++, "卵を買う", null); // ★変更
-        egg.setDone(true); // ★変更
-        todos.add(egg); // ★変更
 
         httpServer.createContext("/", exchange -> {
             String requestPath = exchange.getRequestURI().getPath(); // アクセスされたパスを取り出します
@@ -36,7 +36,8 @@ public class App {
                 if (!title.isEmpty()) { // ★変更
                     LocalDate dueDate = dueDateValue.isEmpty() ? null : LocalDate.parse(dueDateValue);
                     todos.add(new Todo(nextId, title, dueDate));
-                    nextId++; // ★変更
+                    nextId++;
+                    save(); // Todoを追加した一覧をtodos.csvへ保存します
                 } // ★変更
                 exchange.getResponseHeaders().set("Location", "/"); // 戻り先をトップページにします
                 exchange.sendResponseHeaders(303, -1); // トップページへ移動する返答を送ります
@@ -50,6 +51,7 @@ public class App {
                         for (Todo todo : todos) { // ★追加
                             if (todo.getId() == id) { // ★追加
                                 todo.setDone(true); // ★追加
+                                save(); // 完了状態を変更した一覧をtodos.csvへ保存します
                                 break; // ★追加
                             } // ★追加
                         } // ★追加
@@ -64,7 +66,10 @@ public class App {
                 if (query != null && query.startsWith("id=") && query.length() > 3) { // ★追加
                     try { // ★追加
                         int id = Integer.parseInt(query.substring(3)); // ★追加
-                        todos.removeIf(todo -> todo.getId() == id); // ★追加
+                        boolean removed = todos.removeIf(todo -> todo.getId() == id); // ★追加
+                        if (removed) { // 削除で一覧が変わった場合だけ保存します
+                            save(); // 削除後の一覧をtodos.csvへ保存します
+                        } // 削除がなければ保存しません
                     } catch (NumberFormatException e) { // ★追加
                     } // ★追加
                 } // ★追加
@@ -106,6 +111,53 @@ public class App {
         });
         httpServer.start();
         System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）");
+    }
+
+    static void save() throws IOException {
+        List<String> lines = new ArrayList<>();
+        for (Todo todo : todos) {
+            String title = todo.getTitle();
+            if (title.contains(",") || title.contains("\"")) {
+                title = "\"" + title.replace("\"", "\"\"") + "\"";
+            }
+            lines.add(todo.getId() + "," + (todo.isDone() ? "1" : "0") + "," + title);
+        }
+        Files.write(Path.of("todos.csv"), lines, StandardCharsets.UTF_8);
+    }
+
+    static void load() throws IOException {
+        Path path = Path.of("todos.csv");
+        if (!Files.exists(path)) {
+            return;
+        }
+
+        int maxId = 0;
+        for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+            int firstComma = line.indexOf(',');
+            int secondComma = line.indexOf(',', firstComma + 1);
+            if (firstComma < 0 || secondComma < 0) {
+                throw new IOException("todos.csvの形式が正しくありません: " + line);
+            }
+
+            int id = Integer.parseInt(line.substring(0, firstComma));
+            String doneValue = line.substring(firstComma + 1, secondComma);
+            if (!doneValue.equals("0") && !doneValue.equals("1")) {
+                throw new IOException("todos.csvの完了状態が正しくありません: " + line);
+            }
+            String title = line.substring(secondComma + 1);
+            if (title.startsWith("\"")) {
+                if (title.length() < 2 || !title.endsWith("\"")) {
+                    throw new IOException("todos.csvのタイトルが正しくありません: " + line);
+                }
+                title = title.substring(1, title.length() - 1).replace("\"\"", "\"");
+            }
+
+            Todo todo = new Todo(id, title, null);
+            todo.setDone(doneValue.equals("1"));
+            todos.add(todo);
+            maxId = Math.max(maxId, id);
+        }
+        nextId = maxId + 1;
     }
 }
 
