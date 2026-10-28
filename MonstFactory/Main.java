@@ -17,9 +17,18 @@ abstract class Monster {
     }
 
     abstract int specialAttack();
+
 }
 
-class Slime extends Monster {
+interface Flyable {
+    int flyingAttack();
+}
+
+interface OptionalAttacker {
+    int optionalAttack();
+}
+
+class Slime extends Monster implements OptionalAttacker {
     Slime() {
         super("スライム", 5, 2, 20);
     }
@@ -27,6 +36,12 @@ class Slime extends Monster {
     int specialAttack() {
         int damage = 8;
         System.out.println("スライムのねばねば攻撃！");
+        return damage;
+    }
+
+    public int optionalAttack() {
+        int damage = 3;
+        System.out.println("スライムの分裂攻撃！");
         return damage;
     }
 }
@@ -43,7 +58,7 @@ class Goblin extends Monster {
     }
 }
 
-class Wolf extends Monster {
+class Wolf extends Monster implements OptionalAttacker {
     Wolf() {
         super("ウルフ", 10, 1, 30);
     }
@@ -51,6 +66,12 @@ class Wolf extends Monster {
     int specialAttack() {
         int damage = 15;
         System.out.println("ウルフのかみつき！");
+        return damage;
+    }
+
+    public int optionalAttack() {
+        int damage = 12;
+        System.out.println("ウルフの急襲攻撃！");
         return damage;
     }
 }
@@ -79,7 +100,7 @@ class Orc extends Monster {
     }
 }
 
-class Witch extends Monster {
+class Witch extends Monster implements Flyable {
     Witch() {
         super("ウィッチ", 5, 14, 34);
     }
@@ -87,6 +108,12 @@ class Witch extends Monster {
     int specialAttack() {
         int damage = 18;
         System.out.println("ウィッチのダークボルト！");
+        return damage;
+    }
+
+    public int flyingAttack() {
+        int damage = 16;
+        System.out.println(name + "は空から攻撃した！");
         return damage;
     }
 }
@@ -103,7 +130,7 @@ class Golem extends Monster {
     }
 }
 
-class Vampire extends Monster {
+class Vampire extends Monster implements Flyable, OptionalAttacker {
     Vampire() {
         super("ヴァンパイア", 13, 12, 48);
     }
@@ -113,9 +140,21 @@ class Vampire extends Monster {
         System.out.println("ヴァンパイアの吸血攻撃！");
         return damage;
     }
+
+    public int flyingAttack() {
+        int damage = 20;
+        System.out.println(name + "は空から攻撃した！");
+        return damage;
+    }
+
+    public int optionalAttack() {
+        int damage = 22;
+        System.out.println("ヴァンパイアの魅惑攻撃！");
+        return damage;
+    }
 }
 
-class Dragon extends Monster {
+class Dragon extends Monster implements Flyable {
     Dragon() {
         super("ドラゴン", 19, 16, 65);
     }
@@ -123,6 +162,12 @@ class Dragon extends Monster {
     int specialAttack() {
         int damage = 25;
         System.out.println("ドラゴンの炎のブレス！");
+        return damage;
+    }
+
+    public int flyingAttack() {
+        int damage = 24;
+        System.out.println(name + "は空から攻撃した！");
         return damage;
     }
 }
@@ -273,7 +318,12 @@ public class Main {
 
             if (monster.hp > 0) {
                 int damage;
-                if (random.nextInt(4) == 0) {
+                int attackRoll = random.nextInt(4);
+                if (monster instanceof OptionalAttacker && attackRoll == 0) {
+                    damage = ((OptionalAttacker) monster).optionalAttack();
+                } else if (monster instanceof Flyable && attackRoll == 1) {
+                    damage = ((Flyable) monster).flyingAttack();
+                } else if (attackRoll == 2) {
                     damage = monster.specialAttack();
                 } else {
                     damage = monster.strength;
